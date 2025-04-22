@@ -1,6 +1,7 @@
 models/* filter=lfs diff=lfs merge=lfs -text
 ai_travel_assistant filter=lfs diff=lfs merge=lfs -text
 data/* filter=lfs diff=lfs merge=lfs -text
+models/ filter=lfs diff=lfs merge=lfs -text
 /gpt2_finetuned/checkpoint-25/model.safetensors filter=lfs diff=lfs merge=lfs -text
 /gpt2_finetuned/checkpoint-25/optimizer.pt filter=lfs diff=lfs merge=lfs -text
 /models/bert_finetuned/model.safetensors filter=lfs diff=lfs merge=lfs -text
