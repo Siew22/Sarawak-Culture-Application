@@ -300,47 +300,23 @@ def train_bert(excel_path: str, epochs: int = 15, batch_size: int = 4):
 # ---------------------- GPT-2 Itinerary Generation Module ----------------------
 BASE_DIR = Path(__file__).resolve().parent
 custom_gpt2_model_path = BASE_DIR / "models" / "gpt2_finetuned"
-
-# --- Load GPT-2 Tokenizer ---
+#custom_gpt2_model_path = r"C:\Users\User\AppData\Local\Programs\Python\Python310\ai_travel_assistant\models\gpt2_finetuned"
 try:
-    # Check if the fine-tuned tokenizer directory exists and looks like it contains tokenizer files
-    # Checking for a key file like tokenizer_config.json is more robust than just checking directory existence
-    if (custom_gpt2_model_path / "tokenizer_config.json").exists():
-         logger.info(f"Loading fine-tuned GPT-2 tokenizer from: {custom_gpt2_model_path}")
-         tokenizer_gpt2 = GPT2Tokenizer.from_pretrained(custom_gpt2_model_path)
-    else:
-         # If fine-tuned tokenizer not found, load the base GPT-2 tokenizer from Hugging Face
-         logger.warning(f"Fine-tuned GPT-2 tokenizer not found at {custom_gpt2_model_path}, loading base GPT-2 tokenizer ('gpt2').")
-         tokenizer_gpt2 = GPT2Tokenizer.from_pretrained("gpt2")
-
-    # Ensure pad_token is set for generation
+    tokenizer_gpt2 = GPT2Tokenizer.from_pretrained(custom_gpt2_model_path)
     tokenizer_gpt2.pad_token = tokenizer_gpt2.eos_token
-
 except Exception as e:
-    # If even loading the base tokenizer fails, then something is seriously wrong
-    logger.error(f"Failed to load GPT-2 tokenizer (either fine-tuned or base 'gpt2'): {str(e)}")
-    raise # Re-raise the exception as we cannot proceed without a tokenizer
+    logger.error(f"Failed to load tokenizer from {custom_gpt2_model_path}: {str(e)}")
+    raise
 
-# --- Load GPT-2 Model ---
 try:
-    # Check if the fine-tuned model directory exists and looks like it contains model files
-    # Checking for a key file like config.json is more robust
-    if (custom_gpt2_model_path / "config.json").exists():
+    if os.path.exists(custom_gpt2_model_path):
         logger.info(f"Loading fine-tuned GPT-2 model from: {custom_gpt2_model_path}")
         model_gpt2 = GPT2LMHeadModel.from_pretrained(custom_gpt2_model_path).to(device)
     else:
-        # If fine-tuned model not found, load the base GPT-2 model from Hugging Face
-        logger.warning(f"Fine-tuned GPT-2 model not found at {custom_gpt2_model_path}, loading base GPT-2 model ('gpt2').")
-        model_gpt2 = GPT2LMHeadModel.from_pretrained("gpt2").to(device)
-        logger.warning("Note: Using base GPT-2 model. Please run the script with `python main.py` first (and ensure sample file exists) to fine-tune and save the model for better results.")
-
+        raise FileNotFoundError(f"Fine-tuned model not found at {custom_gpt2_model_path}")
 except Exception as e:
-    # If even loading the base model fails, then something is seriously wrong
-    logger.error(f"Failed to load GPT-2 model (either fine-tuned or base 'gpt2'): {str(e)}")
-    raise # Re-raise the exception as we cannot proceed without a model
-
-# Set the model to evaluation mode by default after loading
-model_gpt2.eval()
+    logger.error(f"Failed to load fine-tuned GPT-2 model: {str(e)}")
+    raise
 
 class GPT2Dataset(Dataset):
     def _init_(self, texts, tokenizer, max_len=256):
