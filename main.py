@@ -7,6 +7,8 @@ import logging
 import re
 import traceback
 import random
+import mysql.connector
+from mysql.connector import Error
 from dotenv import load_dotenv
 from torch.utils.data import Dataset, DataLoader
 from torch.nn.utils.rnn import pad_sequence
@@ -50,22 +52,23 @@ else:
     logger.warning("CUDA not available, falling back to CPU")
 
 # ---------------------- Azure SQL 数据库配置 ----------------------
-conn_str = (
-    f"DRIVER={{ODBC Driver 18 for SQL Server}};"
-    f"SERVER={os.getenv('DB_SERVER')};"
-    f"DATABASE={os.getenv('DB_NAME')};"
-    f"UID={os.getenv('DB_USER')};"
-    f"PWD={os.getenv('DB_PASSWORD')}"
-)
-
 def get_db_connection():
     try:
-        conn = pyodbc.connect(conn_str)
-        return conn
-    except Exception as e:
-        logger.error(f"Failed to connect to Azure SQL database: {str(e)}")
+        conn = mysql.connector.connect(
+            host=os.getenv('DB_SERVER'),
+            database=os.getenv('DB_NAME'),
+            user=os.getenv('DB_USER'),
+            password=os.getenv('DB_PASSWORD'),
+            port=int(os.getenv('DB_PORT', 3306)),
+            ssl_ca=r"C:\Users\User\Downloads\DigiCertGlobalRootG2.crt.pem",  # 替换为你的 SSL 证书路径
+            ssl_verify_cert=True
+        )
+        if conn.is_connected():
+            logger.info("Successfully connected to Azure MySQL database")
+            return conn
+    except Error as e:
+        logger.error(f"Failed to connect to Azure MySQL database: {str(e)}")
         raise
-
 # ---------------------- 数据模型 ----------------------
 class ItineraryItem(BaseModel):
     user_id: int
@@ -238,16 +241,16 @@ def train_bert(excel_path: str, epochs: int = 15, batch_size: int = 4):
         effective_batch_size = min(batch_size, len(texts))
 
         class BertDataset(Dataset):
-            def __init__(self, texts, labels, tokenizer, max_len=256):
+            def _init_(self, texts, labels, tokenizer, max_len=256):
                 self.texts = texts
                 self.labels = labels
                 self.tokenizer = tokenizer
                 self.max_len = max_len
 
-            def __len__(self):
+            def _len_(self):
                 return len(self.texts)
 
-            def __getitem__(self, idx):
+            def _getitem_(self, idx):
                 text = str(self.texts[idx])
                 encoding = self.tokenizer(text, return_tensors="pt", max_length=self.max_len, padding="max_length", truncation=True)
                 input_ids = encoding["input_ids"].squeeze()
@@ -316,15 +319,15 @@ except Exception as e:
     raise
 
 class GPT2Dataset(Dataset):
-    def __init__(self, texts, tokenizer, max_len=256):
+    def _init_(self, texts, tokenizer, max_len=256):
         self.texts = texts
         self.tokenizer = tokenizer
         self.max_len = max_len
 
-    def __len__(self):
+    def _len_(self):
         return len(self.texts)
 
-    def __getitem__(self, idx):
+    def _getitem_(self, idx):
         encoding = self.tokenizer(
             self.texts[idx],
             return_tensors="pt",
@@ -802,6 +805,8 @@ def format_itinerary(raw_text: str, days: int = 5) -> str:
         return raw_text
 
 async def save_itinerary_to_db(itinerary: Dict, user_id: int):
+    conn = None
+    cursor = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -816,18 +821,21 @@ async def save_itinerary_to_db(itinerary: Dict, user_id: int):
                             address = name_address[1] if len(name_address) > 1 else "Unknown"
                             query = """
                                 INSERT INTO Itinerary (user_id, day, time_slot, category, name, address)
-                                VALUES (?, ?, ?, ?, ?, ?)
+                                VALUES (%s, %s, %s, %s, %s, %s)
                             """
                             cursor.execute(query, (user_id, day, time_slot, category.upper(), name, address))
         conn.commit()
         logger.info(f"Itinerary saved to database for user_id: {user_id}")
     except Exception as e:
-        conn.rollback()
+        if conn:
+            conn.rollback()
         logger.error(f"Error saving itinerary to DB: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to save itinerary")
     finally:
-        cursor.close()
-        conn.close()
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 async def generate_itinerary(location: str, days: int, food_value: int, attraction_value: int, experience_value: int, sample_file: str, use_gpt2: bool = False, user_id: int = None) -> Dict:
     try:
@@ -981,13 +989,12 @@ def startup():
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("SELECT 1")
-        logger.info("Successfully connected to Azure SQL database")
+        logger.info("Successfully connected to Azure MySQL database")
         cursor.close()
         conn.close()
     except Exception as e:
-        logger.warning(f"Failed to connect to Azure SQL database: {str(e)}. Proceeding without DB connection.")
+        logger.warning(f"Failed to connect to Azure MySQL database: {str(e)}. Proceeding without DB connection.")
         logger.info(f"Registered routes: {[route.path for route in app.routes]}")
-        # 不抛出异常，让服务器继续启动
 
 @app.on_event("shutdown")
 def shutdown():
@@ -1040,27 +1047,33 @@ async def generate_itinerary_json(
 async def get_itineraries(user_id: int, current_user: dict = Depends(get_current_user)):
     if current_user["user_id"] != user_id:
         raise HTTPException(status_code=403, detail="Not authorized to access this user's itineraries")
+    conn = None
+    cursor = None
     try:
         conn = get_db_connection()
-        cursor = conn.cursor()
-        query = "SELECT * FROM Itinerary WHERE user_id = ? ORDER BY day, time_slot"
+        cursor = conn.cursor(dictionary=True)  # 使用字典模式，方便访问列名
+        query = "SELECT * FROM Itinerary WHERE user_id = %s ORDER BY day, time_slot"
         cursor.execute(query, (user_id,))
         rows = cursor.fetchall()
         itineraries = {}
         for row in rows:
-            day = row.day
+            day = row["day"]
             if day not in itineraries:
                 itineraries[day] = {"day": day, "schedule": {"MORNING": {}, "NOON": {}, "AFTERNOON": {}, "EVENING": {}}}
-            time_slot = row.time_slot
-            category = row.category.lower()
+            time_slot = row["time_slot"]
+            category = row["category"].lower()
             if category not in itineraries[day]["schedule"][time_slot]:
                 itineraries[day]["schedule"][time_slot][category] = []
-            itineraries[day]["schedule"][time_slot][category].append(f"{row.category}: {row.name}, Address: {row.address}")
-        conn.close()
+            itineraries[day]["schedule"][time_slot][category].append(f"{row['category']}: {row['name']}, Address: {row['address']}")
         return {"itineraries": list(itineraries.values())}
     except Exception as e:
         logger.error(f"Error fetching itineraries: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to fetch itineraries")
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 @app.get("/navigate")
 async def navigate_endpoint(
@@ -1076,7 +1089,7 @@ async def navigate_endpoint(
         raise HTTPException(status_code=500, detail=f"Error generating navigation: {str(e)}")
 
 # ---------------------- 主程序入口 ----------------------
-if __name__ == "__main__":
+if __name__ == "_main_":
     sample_file = os.getenv("ITINERARY_SAMPLES_FILE", r"C:\Users\User\AppData\Local\Programs\Python\Python310\ai_travel_assistant\data\sample_itineraries.txt")
     preference_file = os.getenv("USER_PREFERENCES_FILE", r"C:\Users\User\AppData\Local\Programs\Python\Python310\ai_travel_assistant\data\user_preferences.xlsx")
 
@@ -1097,5 +1110,5 @@ if __name__ == "__main__":
         logger.error(f"Failed to fine-tune GPT-2: {str(e)}\n{traceback.format_exc()}")
 
     import uvicorn
-    logger.info("Starting FastAPI server on http:// 0.0.0.0:8801")
-    uvicorn.run(app, host="0.0.0.0", port=8801, log_level="debug")
+    logger.info("Starting FastAPI server on http:// 0.0.0.0:8080")
+    uvicorn.run(app, host="0.0.0.0", port=8080, log_level="debug")

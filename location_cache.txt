@@ -20,3 +20,29 @@ jalan abang galau, 97000 bintulu|3.1667389264899835|113.04783282644894
 jalan tanjung batu, 97000 bintulu|3.205077330694364|113.04637882405612
 unicity|4.2514222|117.9084446
 uts|2.34124435|111.84479892154536
+jalan wong nai siong, 96000 sibu|2.2902031|111.8281182
+jalan tuanku osman, 96000 sibu|2.2933501855364122|111.82597818674323
+jalan temple, 96000 sibu|2.287174019849933|111.82627969789746
+sibu indoor stadium|2.33629055|111.84555671418721
+sungai batang rajang|2.0113908|112.6604002
+jalan pahlawan, 96000 sibu|2.311019746133558|111.838843554333
+jalan kampung nyabor, 96000 sibu|2.290608|111.828398
+jalan central, 96000 sibu|2.2893131|111.828487
+rajang river, 96000 sibu|2.3556865|111.9522491
+sibu night market, jalan cross, 96000 sibu|2.2882435|111.8272571
+mukah river, 96400 mukah, sarawak, malaysia|2.8296074|112.28609
+nanga ngungun stalls, 96700 kanowit, sarawak, malaysia|2.0790966|112.0714835
+local farms, nanga ngungun, 96700 kanowit, sarawak, malaysia|2.0790966|112.0714835
+jalan pasar eatery, jalan pasar, 96700 kanowit, sarawak, malaysia|2.0790966|112.0714835
+jalan sungai rajang, 96700 kanowit, sarawak, malaysia|2.0790966|112.0714835
+jalan pasar, 96700 kanowit, sarawak, malaysia|2.0790966|112.0714835
+tanjung aru beach|5.947714299999999|116.0465293
+kedai kopi fatt kee, 28 jalan pantai, 88000 kota kinabalu|5.984890399999999|116.0765111
+siniawan old town, siniawan, 94000 kuching, sarawak, malaysia|1.4461907|110.2199959
+tasik biru, bau, 94000 kuching, sarawak, malaysia|1.4150633|110.1521122
+marina bay, 98000 miri|4.3903245|113.9801559
+jalan miri-pujut, 98000 miri|4.4053222|114.0032015
+jalan south yu seng, 98000 miri|4.39517225|113.9877631
+jalan kuala baram, 98100 miri|4.454512808491265|114.04186004374765
+jalan lutong, 98100 miri|4.470910800465393|114.01126808884614
+sibu heritage centre|2.289613|111.8281324077009
