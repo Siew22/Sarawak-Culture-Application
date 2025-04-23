@@ -7,6 +7,8 @@ import logging
 import re
 import traceback
 import random
+import azure.functions as func
+import sys
 import mysql.connector
 from mysql.connector import Error
 from dotenv import load_dotenv
@@ -36,6 +38,13 @@ from passlib.context import CryptContext
 from pathlib import Path
 from urllib.parse import unquote
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.requests import Request
+from starlette.responses import Response
+from starlette.types import Scope, Receive, Send
+from fastapi.responses import JSONResponse
+
+# 从包含您的FastAPI应用的模块导入
+#from main.py import app # 确保这里的your_fastapi_code是您包含FastAPI定义的文件名
 
 # ---------------------- 环境设置与日志 ----------------------
 load_dotenv(dotenv_path=".env")
@@ -69,6 +78,127 @@ def get_db_connection():
     except Error as e:
         logger.error(f"Failed to connect to Azure MySQL database: {str(e)}")
         raise
+
+# 异步 ASGI 适配器
+# 这个函数是关键，它接收 ASGI 协议的参数 (scope, receive, send)
+# 并将它们传递给您的 FastAPI 应用实例 (app)
+async def run_fastapi(scope: Scope, receive: Receive, send: Send):
+    logger.debug("Running FastAPI via ASGI adapter.")
+    await app(scope, receive, send)
+
+# Azure Functions HTTP 触发器的入口函数
+# function.json 中的 "entryPoint" 指向这个函数
+async def main(req: func.HttpRequest, context: func.Context) -> func.HttpResponse:
+    logger.info(f"Python HTTP trigger function processed a request. Method: {req.method}, URL: {req.url}")
+
+    # 将 Azure Functions HttpRequest 转换为 ASGI Scope, Receive, Send
+    # 这需要构建一个 ASGI 接口来模拟服务器与应用交互
+    
+    # 构建 ASGI Scope
+    # req.url.path 返回不包含 domain 和 /api/FunctionName 的路径
+    # 我们需要从 req.route_params['route'] 中重构完整的相对路径
+    # 例如，如果访问的是 https://<domain>/api/HttpTriggerFunction/generate_itinerary_json
+    # req.route_params['route'] 会是 'generate_itinerary_json'
+    # path = '/' + req.route_params.get('route', '')
+    
+    # 使用 req.url 的路径部分，它包含了 /api/HttpTriggerFunction/ 后面的内容
+    # 但是 Function App 的根路径是 /site/wwwroot，而不是 /api/FunctionName
+    # FastAPI 需要的是相对于应用的根路径，也就是去掉 /api/HttpTriggerFunction 的部分
+    # req.url.path 应该已经包含了 /api/FunctionName/ 后面的路径
+    # 例如对于 /api/HttpTriggerFunction/generate_itinerary_json, req.url.path 是 /api/HttpTriggerFunction/generate_itinerary_json
+    # 真实的路径应该是相对于 Function App 的根目录 /site/wwwroot
+    # 适配器需要找到 /api/<FunctionName>/ 后面的部分
+    
+    # 从 req.url.path 提取相对路径，例如从 /api/HttpTriggerFunction/generate_itinerary_json 提取 /generate_itinerary_json
+    # function_name = context.function_name # 获取 function.json 中定义的函数名
+    # path_parts = req.url.path.split('/api/')
+    # relative_path_with_func_name = path_parts[-1] if len(path_parts) > 1 else ''
+    # relative_path = '/' + '/'.join(relative_path_with_func_name.split('/')[1:]) # Remove FunctionName from path
+    
+    # 尝试直接使用 req.route_params['route']
+    route_param = req.route_params.get('route', '')
+    path = '/' + route_param # 路径应该是相对于 Function 的根 (即 /api/FunctionName/)
+    
+    logger.debug(f"Reconstructed path from route_params: {path}")
+
+    # 从 HttpRequest 获取 body
+    try:
+        body_bytes = req.get_body()
+    except ValueError: # Body might be empty
+        body_bytes = b''
+
+    # 构建 ASGI scope 字典
+    scope = {
+        'type': 'http',
+        'asgi': {'version': '3.0'},
+        'http_version': '1.1', # Function App usually uses HTTP/1.1
+        'method': req.method,
+        'scheme': req.headers.get('X-Forwarded-Proto', 'http'), # Get scheme from Azure's header
+        'path': path, # 使用重构的路径
+        'raw_path': path.encode('ascii'), # ASCII encoded path
+        'query_string': req.query_string.encode('ascii'), # Query string
+        'root_path': '/api/' + context.function_name, # ASGI root_path should be the base path where the ASGI app is mounted
+        'headers': [[k.lower().encode('utf-8'), v.encode('utf-8')] for k, v in req.headers.items()], # Headers
+        'client': (req.headers.get('X-Forwarded-For', 'unknown'), 0), # Client IP (simplified)
+        'server': (req.headers.get('Host', 'localhost'), int(req.headers.get('X-Forwarded-Port', 80))), # Server host and port (simplified)
+        'state': {'azure_func_context': context} # Optionally pass context
+    }
+
+         # 简单的 receive 接口
+    # 这个协程模拟从客户端接收请求体
+    async def receive():
+        # 对于有请求体的请求 (如 POST, PUT)，需要在这里 yield body
+        # 简单的实现假设一次性获取所有 body
+        if not hasattr(receive, "_body_sent"): # 标记确保 body 只发送一次
+            setattr(receive, "_body_sent", True)
+            return {'type': 'http.request', 'body': body_bytes, 'more_body': False}
+        return {'type': 'http.request', 'body': b'', 'more_body': False}
+
+    # 简单的 send 接口
+    # 这个协程模拟向客户端发送响应
+    response_data = {}
+    async def send(message):
+        # FastAPI 通过 send 接口将响应信息写回
+        if message['type'] == 'http.response.start':
+            status_code = message['status']
+            headers = {k.decode('utf-8'): v.decode('utf-8') for k, v in message.get('headers', [])}
+            response_data['status_code'] = status_code
+            response_data['headers'] = headers
+        elif message['type'] == 'http.response.body':
+            body = message.get('body', b'')
+            if 'body' in response_data:
+                response_data['body'] += body
+            else:
+                response_data['body'] = body
+            # Handle 'more_body': message.get('more_body', False)
+
+    # 运行 FastAPI 应用来处理请求
+    try:
+        await run_fastapi(scope, receive, send)
+        logger.debug(f"FastAPI execution completed. Response data: {response_data.keys()}")
+
+        # 从 response_data 构建 Azure Functions HttpResponse
+        status_code = response_data.get('status_code', 500) # Default to 500 if status_code is missing
+        headers = response_data.get('headers', {})
+        body = response_data.get('body', b'') # Body is already bytes from FastAPI
+
+        # FastAPI 可能设置了 Content-Length 头，Azure Functions 会自动处理
+        # 如果遇到问题，可以尝试删除这个头： del headers['content-length']
+
+        return func.HttpResponse(
+            body=body,
+            status_code=status_code,
+            headers=headers
+        )
+
+    except Exception as e:
+        logger.error(f"Error executing FastAPI app: {str(e)}\n{traceback.format_exc()}")
+        # 返回 Function 级别的错误响应
+        return func.HttpResponse(
+            f"Internal Server Error during FastAPI processing: {str(e)}",
+            status_code=500
+        )
+
 # ---------------------- 数据模型 ----------------------
 class ItineraryItem(BaseModel):
     user_id: int
@@ -970,6 +1100,24 @@ async def generate_itinerary(location: str, days: int, food_value: int, attracti
     except Exception as e:
         logger.error(f"Error in generate_itinerary: {str(e)}\n{traceback.format_exc()}")
         raise
+
+# 确保项目根目录在 sys.path 中，这样才能导入 api_app
+# __file__ 是当前文件 (__init__.py) 的路径
+# Path(__file__).parent 是 HttpTriggerFunction 文件夹
+# Path(__file__).parent.parent 是项目根目录
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+# 从 api_app.py 导入您的 FastAPI 应用实例
+try:
+    from api_app import app
+    logger.info("FastAPI app imported successfully.")
+except ImportError as e:
+    logger.error(f"Failed to import FastAPI app: {e}. Make sure api_app.py exists at the root and has `app = FastAPI()` defined.")
+    # 如果导入失败，创建一个假的app，防止运行时崩溃
+    app = FastAPI()
+    @app.get("/import_error")
+    async def import_error():
+        return JSONResponse({"detail": "FastAPI app failed to load."}, status_code=500)
 
 # ---------------------- FastAPI Application ----------------------
 app = FastAPI()
