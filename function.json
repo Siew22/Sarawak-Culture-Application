@@ -1,19 +1,13 @@
 {
-    "scriptFile": "__init__.py",  
-    "entryPoint": "main",    
+    "scriptFile": "__init__.py",
+    "entryPoint": "main",
     "bindings": [
       {
-        "authLevel": "function",
+        "authLevel": "anonymous", 
         "type": "httpTrigger",
         "direction": "in",
         "name": "req",
-        "methods": [
-          "get",
-          "post",
-          "put",
-          "delete"
-        ],
-        "route": "{*route}" 
+        "methods": ["get", "post"]
       },
       {
         "type": "http",
