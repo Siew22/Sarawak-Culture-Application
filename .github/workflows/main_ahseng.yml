@@ -77,7 +77,7 @@ jobs:
         uses: Azure/functions-action@v1
         id: deploy-to-function
         with:
-          app-name: 'AhSeng'
+          app-name: 'AhSeng' # <<== 将这里改为您的新 Function App 名称
           slot-name: 'Production'
           package: ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}
           
