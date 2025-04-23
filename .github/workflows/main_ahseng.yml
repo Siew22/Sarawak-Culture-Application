@@ -35,7 +35,7 @@ jobs:
           source venv/bin/activate
 
       - name: Install dependencies
-        run: pip install -r requirement.txt --extra-index-url https://download.pytorch.org/whl/cu121
+        run: pip install -r requirements.txt
 
       # Optional: Add step to run tests here
 
@@ -69,15 +69,15 @@ jobs:
       - name: Login to Azure
         uses: azure/login@v2
         with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_EC8FD26D858F4611AFCBE927582CDBAD }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_49393C8D52F64D43B0EF1DDC192C9490 }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_EA83545CA9C14F928201CA9CB2A1D6BB }}
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_FAAF47314E324302BD6FB25C0E0B155A }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_9D62D20DF21043D3B4D9B6045FA4CCEA }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_7CD00B6F2C12466289E381A23E58B4C8 }}
 
       - name: 'Deploy to Azure Functions'
         uses: Azure/functions-action@v1
         id: deploy-to-function
         with:
-          app-name: 'AhSeng' # <<== 将这里改为您的新 Function App 名称
+          app-name: 'AhSeng'
           slot-name: 'Production'
           package: ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}
           
