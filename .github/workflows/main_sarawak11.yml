@@ -35,7 +35,7 @@ jobs:
           source venv/bin/activate
 
       - name: Install dependencies
-        run: pip install -r requirement.txt
+        run: pip install -r requirements.txt
 
       # Optional: Add step to run tests here
 
@@ -69,9 +69,9 @@ jobs:
       - name: Login to Azure
         uses: azure/login@v2
         with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_CF448C9995034E2A9C09E5654D9C82B3 }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_B294107AD65D47AB85516851B59431A4 }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_EDF13BB43B7E41A4BCE94247D87A139A }}
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_02F2AD5805D547D995EDE4FEC898B14B }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_2840930C1EB54E52AEA180BA838D57A0 }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_8CF47FAC66A44260BE66615F67311458 }}
 
       - name: 'Deploy to Azure Functions'
         uses: Azure/functions-action@v1
